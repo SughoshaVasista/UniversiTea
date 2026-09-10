@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { getCommunityBySlug } from '@/lib/community/getCommunity'
 import { getPostById } from '@/lib/post/postService'
 import { AnonymousAuthor } from '@/components/ui/AnonymousAuthor'
-import { VerificationBadge } from '@/components/ui/VerificationBadge'
+import { VerificationBadge, type VerificationStatus } from '@/components/ui/VerificationBadge'
 import { CommentSection } from '@/components/post/CommentSection'
 import { TeaCheck } from '@/components/verification/TeaCheck'
 import { getSession } from '@/lib/auth/getSession'
@@ -18,10 +18,9 @@ export default async function PostDetailPage({ params }: Props) {
   const community = await getCommunityBySlug(communitySlug)
   if (!community) notFound()
 
-  const post = await getPostById(postId, community.id)
-  if (!post) notFound()
-
   const session = await getSession()
+  const post = await getPostById(postId, community.id, session?.user.id)
+  if (!post) notFound()
 
   return (
     <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-8">
@@ -56,7 +55,7 @@ export default async function PostDetailPage({ params }: Props) {
         </div>
 
         <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
-          <VerificationBadge status="UNVERIFIED" />
+          <VerificationBadge status={(post.verificationStatus || 'UNVERIFIED') as VerificationStatus} />
           <div className="flex items-center gap-4 text-zinc-400">
             <span className="flex items-center gap-1">
               <span>↑</span> {post.score}

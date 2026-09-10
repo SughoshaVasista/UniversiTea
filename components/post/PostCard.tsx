@@ -9,9 +9,10 @@ interface PostCardProps {
   communitySlug: string
   onVote?: (postId: string, value: 1 | -1 | 0) => void
   userVote?: 1 | -1 | 0
+  votePending?: boolean
 }
 
-export function PostCard({ post, communitySlug, onVote = () => {}, userVote = 0 }: PostCardProps) {
+export function PostCard({ post, communitySlug, onVote = () => {}, userVote = 0, votePending = false }: PostCardProps) {
   const isUpvoted = userVote === 1
   const isDownvoted = userVote === -1
 
@@ -39,20 +40,20 @@ export function PostCard({ post, communitySlug, onVote = () => {}, userVote = 0 
         
         <div className="flex items-center gap-4">
           <div className="flex items-center bg-zinc-800/50 rounded-full">
-            <button 
+            <button disabled={votePending}
               onClick={() => onVote(post.id, isUpvoted ? 0 : 1)}
               aria-label={isUpvoted ? 'Remove upvote' : 'Upvote post'}
-              className={`p-2 rounded-full transition-colors ${isUpvoted ? 'text-emerald-500' : 'text-zinc-400 hover:text-emerald-400'}`}
+              className={`p-2 rounded-full transition-colors disabled:opacity-50 ${isUpvoted ? 'text-emerald-500' : 'text-zinc-400 hover:text-emerald-400'}`}
             >
               ↑
             </button>
             <span className={`text-sm font-medium px-1 ${isUpvoted ? 'text-emerald-500' : isDownvoted ? 'text-red-500' : 'text-zinc-300'}`}>
               {post.score}
             </span>
-            <button 
+            <button disabled={votePending}
               onClick={() => onVote(post.id, isDownvoted ? 0 : -1)}
               aria-label={isDownvoted ? 'Remove downvote' : 'Downvote post'}
-              className={`p-2 rounded-full transition-colors ${isDownvoted ? 'text-red-500' : 'text-zinc-400 hover:text-red-400'}`}
+              className={`p-2 rounded-full transition-colors disabled:opacity-50 ${isDownvoted ? 'text-red-500' : 'text-zinc-400 hover:text-red-400'}`}
             >
               ↓
             </button>

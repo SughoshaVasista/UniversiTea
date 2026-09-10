@@ -15,6 +15,7 @@ export function CommentSection({ postId, communitySlug, isAuthenticated }: Comme
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
   const [replyTo, setReplyTo] = useState<string | null>(null)
+  const [pendingVotes, setPendingVotes] = useState<Set<string>>(new Set())
 
   const fetchComments = async () => {
     try {
@@ -54,8 +55,9 @@ export function CommentSection({ postId, communitySlug, isAuthenticated }: Comme
   }
 
   const handleVote = async (commentId: string, currentVote: number, nextVote: 1 | -1) => {
-    if (!isAuthenticated) return
+    if (!isAuthenticated || pendingVotes.has(commentId)) return
     const value = currentVote === nextVote ? 0 : nextVote
+    setPendingVotes((current) => new Set(current).add(commentId))
     setComments((current) => current.map((comment) => {
       if (comment.id !== commentId) return comment
       const previous = comment.userVote || 0
@@ -65,9 +67,23 @@ export function CommentSection({ postId, communitySlug, isAuthenticated }: Comme
       const response = await fetch(`/api/communities/${communitySlug}/posts/${postId}/comments/${commentId}/vote`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ value }),
       })
-      if (!response.ok) fetchComments()
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not vote')
+      if (data.score !== undefined) {
+        setComments((current) => current.map((comment) => comment.id === commentId
+          ? { ...comment, score: data.score, upvotes: data.upvotes, downvotes: data.downvotes, userVote: data.userVote }
+          : comment))
+      } else {
+        fetchComments()
+      }
     } catch {
       fetchComments()
+    } finally {
+      setPendingVotes((current) => {
+        const next = new Set(current)
+        next.delete(commentId)
+        return next
+      })
     }
   }
 
@@ -127,9 +143,9 @@ export function CommentSection({ postId, communitySlug, isAuthenticated }: Comme
               </div>
               <p className="text-zinc-300">{comment.content}</p>
               <div className="flex items-center gap-3 mt-3 text-xs">
-                <button aria-label="Upvote comment" onClick={() => handleVote(comment.id, comment.userVote || 0, 1)} className={comment.userVote === 1 ? 'text-emerald-400' : 'text-zinc-500 hover:text-emerald-400'}>▲</button>
+                <button disabled={pendingVotes.has(comment.id)} aria-label="Upvote comment" onClick={() => handleVote(comment.id, comment.userVote || 0, 1)} className={comment.userVote === 1 ? 'text-emerald-400' : 'text-zinc-500 hover:text-emerald-400'}>▲</button>
                 <span className="text-zinc-400">{comment.score || 0}</span>
-                <button aria-label="Downvote comment" onClick={() => handleVote(comment.id, comment.userVote || 0, -1)} className={comment.userVote === -1 ? 'text-rose-400' : 'text-zinc-500 hover:text-rose-400'}>▼</button>
+                <button disabled={pendingVotes.has(comment.id)} aria-label="Downvote comment" onClick={() => handleVote(comment.id, comment.userVote || 0, -1)} className={comment.userVote === -1 ? 'text-rose-400' : 'text-zinc-500 hover:text-rose-400'}>▼</button>
                 <button onClick={() => setReplyTo(comment.id)} className="text-zinc-500 hover:text-zinc-300 font-medium">Reply</button>
               </div>
             </div>
@@ -143,9 +159,9 @@ export function CommentSection({ postId, communitySlug, isAuthenticated }: Comme
                   </div>
                   <p className="text-zinc-300 text-sm">{reply.content}</p>
                   <div className="flex items-center gap-3 mt-2 text-xs">
-                    <button aria-label="Upvote reply" onClick={() => handleVote(reply.id, reply.userVote || 0, 1)} className={reply.userVote === 1 ? 'text-emerald-400' : 'text-zinc-500 hover:text-emerald-400'}>▲</button>
+                    <button disabled={pendingVotes.has(reply.id)} aria-label="Upvote reply" onClick={() => handleVote(reply.id, reply.userVote || 0, 1)} className={reply.userVote === 1 ? 'text-emerald-400' : 'text-zinc-500 hover:text-emerald-400'}>▲</button>
                     <span className="text-zinc-400">{reply.score || 0}</span>
-                    <button aria-label="Downvote reply" onClick={() => handleVote(reply.id, reply.userVote || 0, -1)} className={reply.userVote === -1 ? 'text-rose-400' : 'text-zinc-500 hover:text-rose-400'}>▼</button>
+                    <button disabled={pendingVotes.has(reply.id)} aria-label="Downvote reply" onClick={() => handleVote(reply.id, reply.userVote || 0, -1)} className={reply.userVote === -1 ? 'text-rose-400' : 'text-zinc-500 hover:text-rose-400'}>▼</button>
                   </div>
                 </div>
               ))}

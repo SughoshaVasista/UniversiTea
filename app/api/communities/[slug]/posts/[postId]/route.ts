@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCommunityBySlug } from '@/lib/community/getCommunity'
 import { getPostById } from '@/lib/post/postService'
 import { sanitizePublicIdentity } from '@/lib/identity/generator'
+import { getParticipationSession } from '@/lib/auth/participation'
 
 export async function GET(
   request: NextRequest,
@@ -15,7 +16,8 @@ export async function GET(
       return NextResponse.json({ error: 'Community not found' }, { status: 404 })
     }
 
-    const post = await getPostById(postId, community.id)
+    const session = await getParticipationSession()
+    const post = await getPostById(postId, community.id, session?.user.id)
     if (!post) {
       return NextResponse.json({ error: 'Post not found' }, { status: 404 })
     }
@@ -28,6 +30,7 @@ export async function GET(
       upvotes: post.upvotes,
       downvotes: post.downvotes,
       score: post.score,
+      userVote: post.votes?.[0]?.value || 0,
       createdAt: post.createdAt.toISOString(),
       updatedAt: post.updatedAt.toISOString(),
       commentCount: post._count.comments,

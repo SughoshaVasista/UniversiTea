@@ -101,7 +101,7 @@ export async function createPost({ communityId, userId, title, content, category
   return post
 }
 
-export async function getPostsFeed(communityId: string, type: 'HOT' | 'NEW', cursor?: string, limit = 20) {
+export async function getPostsFeed(communityId: string, type: 'HOT' | 'NEW', cursor?: string, limit = 20, userId?: string) {
   const query: any = {
     where: { communityId, status: 'PUBLISHED', deletedAt: null },
     take: limit + 1,
@@ -109,6 +109,7 @@ export async function getPostsFeed(communityId: string, type: 'HOT' | 'NEW', cur
       anonymousIdentity: true,
       tags: { include: { tag: true } },
       _count: { select: { comments: true } },
+      votes: userId ? { where: { userId }, select: { value: true } } : undefined,
     },
   }
 
@@ -138,7 +139,7 @@ export async function getPostsFeed(communityId: string, type: 'HOT' | 'NEW', cur
   return { posts: freshPosts, nextCursor }
 }
 
-export async function getPostById(postId: string, communityId: string) {
+export async function getPostById(postId: string, communityId: string, userId?: string) {
   const post = await prisma.post.findFirst({
     where: {
       id: postId,
@@ -148,7 +149,8 @@ export async function getPostById(postId: string, communityId: string) {
     },
     include: {
       anonymousIdentity: true,
-      _count: { select: { comments: true } }
+      _count: { select: { comments: true } },
+      votes: userId ? { where: { userId }, select: { value: true } } : undefined,
     }
   })
 
@@ -173,15 +175,15 @@ async function applyVoteDelta(postId: string, delta: VoteDelta) {
   await prisma.post.update({ where: { id: postId }, data })
 }
 
-async function emitVoteUpdate(postId: string) {
-  if (!global.io || typeof prisma.post.findUnique !== 'function') return
+async function getVoteSnapshot(postId: string) {
+  if (typeof prisma.post.findUnique !== 'function') return null
   const post = await prisma.post.findUnique({
     where: { id: postId },
     select: { id: true, score: true, upvotes: true, downvotes: true },
   })
-  if (!post) return
+  if (!post) return null
   const [freshPost] = await mergeVoteDeltas([post])
-  global.io.to(`post_${postId}`).emit('POST_VOTE_UPDATED', freshPost)
+  return freshPost
 }
 
 export async function votePost(postId: string, userId: string, communityId: string, value: 1 | -1 | 0) {
@@ -255,6 +257,9 @@ export async function votePost(postId: string, userId: string, communityId: stri
   })
 
   await applyVoteDelta(postId, result.delta)
-  await emitVoteUpdate(postId)
-  return { status: result.status }
+  const snapshot = await getVoteSnapshot(postId)
+  if (snapshot && global.io) {
+    global.io.to(`post_${postId}`).emit('POST_VOTE_UPDATED', snapshot)
+  }
+  return { status: result.status, userVote: value, post: snapshot }
 }

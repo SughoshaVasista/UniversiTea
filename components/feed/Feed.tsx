@@ -21,6 +21,7 @@ export function Feed({ communitySlug, communityId, isAuthenticated }: FeedProps)
   const [loading, setLoading] = useState(true)
   const [cursor, setCursor] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(false)
+  const [pendingVotes, setPendingVotes] = useState<Set<string>>(new Set())
 
   const fetchPosts = async (currentTab: string, currentCursor?: string) => {
     try {
@@ -77,11 +78,12 @@ export function Feed({ communitySlug, communityId, isAuthenticated }: FeedProps)
   }, [socket, tab])
 
   const handleVote = async (postId: string, value: 1 | -1 | 0) => {
-    // Optimistic UI
-    setPosts(posts.map(p => {
+    if (!isAuthenticated || pendingVotes.has(postId)) return
+    setPendingVotes((current) => new Set(current).add(postId))
+    setPosts((currentPosts) => currentPosts.map(p => {
       if (p.id === postId) {
-        // Calculate new score approximately (assuming previous vote was 0 for simplicity, real app needs user vote tracking)
-        return { ...p, score: p.score + value }
+        const previousVote = p.userVote || 0
+        return { ...p, userVote: value, score: p.score + value - previousVote }
       }
       return p
     }))
@@ -94,11 +96,24 @@ export function Feed({ communitySlug, communityId, isAuthenticated }: FeedProps)
       })
       if (response.status === 401) {
         router.push(`/auth/login?next=/r/${communitySlug}`)
+        return
       }
-      // Optionally refresh to get true score
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Could not vote')
+      if (data.post) {
+        setPosts((current) => current.map((post) => post.id === postId
+          ? { ...post, ...data.post, userVote: data.userVote }
+          : post))
+      }
     } catch (err) {
       console.error(err)
-      // Revert optimism if needed
+      await fetchPosts(tab)
+    } finally {
+      setPendingVotes((current) => {
+        const next = new Set(current)
+        next.delete(postId)
+        return next
+      })
     }
   }
 
@@ -168,6 +183,8 @@ export function Feed({ communitySlug, communityId, isAuthenticated }: FeedProps)
               post={post} 
               communitySlug={communitySlug} 
               onVote={handleVote} 
+              userVote={post.userVote || 0}
+              votePending={pendingVotes.has(post.id)}
             />
           ))}
 

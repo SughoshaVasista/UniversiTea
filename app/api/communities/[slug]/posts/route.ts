@@ -20,7 +20,8 @@ export async function GET(
     const cursor = searchParams.get('cursor') || undefined
     const type = searchParams.get('type') === 'HOT' ? 'HOT' : 'NEW'
 
-    const feed = await getPostsFeed(community.id, type, cursor)
+    const session = await getParticipationSession()
+    const feed = await getPostsFeed(community.id, type, cursor, 20, session?.user.id)
     
     // Sanitize author identities
     const sanitizedPosts = feed.posts.map((p) => {
@@ -33,6 +34,7 @@ export async function GET(
         upvotes: post.upvotes,
         downvotes: post.downvotes,
         score: post.score,
+        userVote: post.votes?.[0]?.value || 0,
         createdAt: post.createdAt.toISOString(),
         updatedAt: post.updatedAt.toISOString(),
         commentCount: post._count?.comments ?? 0,

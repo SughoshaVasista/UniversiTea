@@ -29,7 +29,7 @@ export default async function RootLayout({
 }) {
   const session = await getSession()
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} dark`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
       <body className="min-h-screen flex flex-col selection:bg-amber-500/30 selection:text-amber-200">
         <header className="site-header sticky top-0 z-50 border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur-md">
           <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">

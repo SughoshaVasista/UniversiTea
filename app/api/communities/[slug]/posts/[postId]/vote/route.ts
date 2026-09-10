@@ -28,7 +28,7 @@ export async function POST(
 
     const result = await votePost(postId, session.user.id, community.id, value as 1 | -1 | 0)
 
-    return NextResponse.json({ success: true, status: result.status })
+    return NextResponse.json({ success: true, ...result })
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 400 })
   }
