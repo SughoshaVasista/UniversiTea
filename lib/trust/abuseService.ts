@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/prisma'
+import { getRedisClient } from '@/lib/redis/client'
 
 export async function flagAbuseSignal(userId: string, communityId: string, signalType: string, severity: string) {
   return prisma.abuseSignal.create({
@@ -13,17 +14,28 @@ export async function flagAbuseSignal(userId: string, communityId: string, signa
 
 // 1. Check for rapid voting (e.g. > 10 votes in the last 1 minute)
 export async function checkRapidVoting(userId: string, communityId: string) {
-  const oneMinuteAgo = new Date(Date.now() - 60000)
-  
-  const recentVotes = typeof prisma.vote?.count === 'function'
-    ? await prisma.vote.count({
-        where: {
-          userId,
-          post: { communityId },
-          createdAt: { gte: oneMinuteAgo }
-        }
-      })
-    : 0
+  const now = Date.now()
+  const redis = await getRedisClient()
+  let recentVotes = 0
+
+  if (redis) {
+    const key = `rate:vote:${communityId}:${userId}`
+    const result = await redis.multi()
+      .zRemRangeByScore(key, 0, now - 60000)
+      .zAdd(key, { score: now, value: `${now}:${Math.random().toString(36).slice(2)}` })
+      .zCard(key)
+      .expire(key, 60)
+      .exec()
+    recentVotes = Number(result[2] ?? 0)
+  } else if (typeof prisma.vote?.count === 'function') {
+    recentVotes = await prisma.vote.count({
+      where: {
+        userId,
+        post: { communityId },
+        createdAt: { gte: new Date(now - 60000) }
+      }
+    })
+  }
 
   if (recentVotes > 10) {
     await flagAbuseSignal(userId, communityId, 'RAPID_VOTING', 'HIGH')

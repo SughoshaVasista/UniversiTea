@@ -226,6 +226,7 @@ model Post {
   mutes               Mute[]
 
   @@index([communityId, createdAt])
+  @@index([communityId, status, score, createdAt])
   @@index([createdAt])
 }
 

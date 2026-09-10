@@ -106,6 +106,12 @@ notification events across instances. Socket user subscriptions are authorized
 from the `universitea_session` cookie during the handshake; a client cannot join
 another user's private notification room by supplying a different user ID.
 
+Vote writes remain idempotent in PostgreSQL, while score/upvote/downvote deltas
+are accumulated in Redis and flushed to PostgreSQL by the custom server's worker
+every few seconds. Feed reads merge pending Redis deltas for fresh counts; HOT
+ordering is based on the persisted score until the next flush, which avoids a
+database write lock on every vote at the cost of a short ordering delay.
+
 For a multi-instance smoke test, run two app processes on different ports behind
 the same Redis and connect a browser to each. A vote/comment/notification sent
 through one process should arrive on the other process's subscribed socket.

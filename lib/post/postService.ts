@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma'
 import { getOrCreateAnonymousIdentityForThread } from '@/lib/identity/anonymousService'
 import { isDuplicateContent, checkRapidVoting } from '@/lib/trust/abuseService'
+import { mergeVoteDeltas, recordVoteDelta, type VoteDelta } from '@/lib/post/voteCounter'
 
 export interface CreatePostOptions {
   communityId: string
@@ -126,14 +127,15 @@ export async function getPostsFeed(communityId: string, type: 'HOT' | 'NEW', cur
   }
 
   const posts = await prisma.post.findMany(query)
+  const freshPosts = await mergeVoteDeltas(posts)
   let nextCursor: string | undefined = undefined
   
-  if (posts.length > limit) {
-    const nextItem = posts.pop()
+  if (freshPosts.length > limit) {
+    const nextItem = freshPosts.pop()
     nextCursor = nextItem?.id
   }
 
-  return { posts, nextCursor }
+  return { posts: freshPosts, nextCursor }
 }
 
 export async function getPostById(postId: string, communityId: string) {
@@ -150,7 +152,36 @@ export async function getPostById(postId: string, communityId: string) {
     }
   })
 
-  return post
+  if (!post) return post
+  const [freshPost] = await mergeVoteDeltas([post])
+  return freshPost
+}
+
+async function applyVoteDelta(postId: string, delta: VoteDelta) {
+  if (delta.score === 0 && delta.upvotes === 0 && delta.downvotes === 0) return
+
+  const queued = await recordVoteDelta(postId, delta)
+  if (queued) return
+
+  const operation = (amount: number) => amount > 0
+    ? { increment: amount }
+    : { decrement: Math.abs(amount) }
+  const data: Record<string, { increment?: number; decrement?: number }> = {}
+  if (delta.score) data.score = operation(delta.score)
+  if (delta.upvotes) data.upvotes = operation(delta.upvotes)
+  if (delta.downvotes) data.downvotes = operation(delta.downvotes)
+  await prisma.post.update({ where: { id: postId }, data })
+}
+
+async function emitVoteUpdate(postId: string) {
+  if (!global.io || typeof prisma.post.findUnique !== 'function') return
+  const post = await prisma.post.findUnique({
+    where: { id: postId },
+    select: { id: true, score: true, upvotes: true, downvotes: true },
+  })
+  if (!post) return
+  const [freshPost] = await mergeVoteDeltas([post])
+  global.io.to(`post_${postId}`).emit('POST_VOTE_UPDATED', freshPost)
 }
 
 export async function votePost(postId: string, userId: string, communityId: string, value: 1 | -1 | 0) {
@@ -167,7 +198,7 @@ export async function votePost(postId: string, userId: string, communityId: stri
     throw new Error('You are voting too quickly. Please slow down.')
   }
 
-  return await prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const existingVote = await tx.vote.findUnique({
       where: { postId_userId: { postId, userId } }
     })
@@ -176,32 +207,21 @@ export async function votePost(postId: string, userId: string, communityId: stri
       // Remove vote
       if (existingVote) {
         await tx.vote.delete({ where: { id: existingVote.id } })
-        const voteDiff = existingVote.value === 1 ? -1 : 1 // if it was upvote, remove upvote
-        const updateData: any = {}
-        if (existingVote.value === 1) updateData.upvotes = { decrement: 1 }
-        if (existingVote.value === -1) updateData.downvotes = { decrement: 1 }
-        updateData.score = { decrement: existingVote.value }
-
-        await tx.post.update({ where: { id: postId }, data: updateData })
+        return {
+          status: 'removed' as const,
+          delta: {
+            score: -existingVote.value,
+            upvotes: existingVote.value === 1 ? -1 : 0,
+            downvotes: existingVote.value === -1 ? -1 : 0,
+          },
+        }
       }
-      const updatedPost = typeof tx.post.findUnique === 'function'
-        ? await tx.post.findUnique({ where: { id: postId }, select: { id: true, score: true, upvotes: true, downvotes: true } })
-        : null
-      if (updatedPost && global.io) {
-        global.io.to(`post_${postId}`).emit('POST_VOTE_UPDATED', updatedPost)
-      }
-      return { status: 'removed' }
+      return { status: 'removed' as const, delta: { score: 0, upvotes: 0, downvotes: 0 } }
     } else {
       // Create or update vote
       if (existingVote) {
         if (existingVote.value === value) {
-          const currentPost = typeof tx.post.findUnique === 'function'
-            ? await tx.post.findUnique({ where: { id: postId }, select: { id: true, score: true, upvotes: true, downvotes: true } })
-            : null
-          if (currentPost && global.io) {
-            global.io.to(`post_${postId}`).emit('POST_VOTE_UPDATED', currentPost)
-          }
-          return { status: 'unchanged' }
+          return { status: 'unchanged' as const, delta: { score: 0, upvotes: 0, downvotes: 0 } }
         }
         
         await tx.vote.update({
@@ -209,53 +229,32 @@ export async function votePost(postId: string, userId: string, communityId: stri
           data: { value }
         })
         
-        // Changing vote from 1 to -1 means -1 upvote, +1 downvote, score -2
-        // Changing from -1 to 1 means -1 downvote, +1 upvote, score +2
-        const updateData: any = {}
-        if (value === 1) {
-          updateData.upvotes = { increment: 1 }
-          updateData.downvotes = { decrement: 1 }
-          updateData.score = { increment: 2 }
-        } else {
-          updateData.upvotes = { decrement: 1 }
-          updateData.downvotes = { increment: 1 }
-          updateData.score = { decrement: 2 }
+        const direction = value === 1 ? 1 : -1
+        const previousDirection = existingVote.value === 1 ? 1 : -1
+        const delta = {
+          score: (direction - previousDirection),
+          upvotes: value === 1 ? 1 : -1,
+          downvotes: value === -1 ? 1 : -1,
         }
-
-        await tx.post.update({ where: { id: postId }, data: updateData })
-
-        const updatedPost = typeof tx.post.findUnique === 'function'
-          ? await tx.post.findUnique({ where: { id: postId }, select: { id: true, score: true, upvotes: true, downvotes: true } })
-          : null
-        if (updatedPost && global.io) {
-          global.io.to(`post_${postId}`).emit('POST_VOTE_UPDATED', updatedPost)
-        }
+        return { status: 'voted' as const, delta }
       } else {
         await tx.vote.create({
           data: { postId, userId, value }
         })
 
-        const updateData: any = {}
-        if (value === 1) {
-          updateData.upvotes = { increment: 1 }
-          updateData.score = { increment: 1 }
-        } else {
-          updateData.downvotes = { increment: 1 }
-          updateData.score = { decrement: 1 }
-        }
-
-        const updatedPost = await tx.post.update({ where: { id: postId }, data: updateData })
-
-        if (global.io && updatedPost) {
-          global.io.to(`post_${postId}`).emit('POST_VOTE_UPDATED', {
-            postId,
-            score: updatedPost.score,
-            upvotes: updatedPost.upvotes,
-            downvotes: updatedPost.downvotes
-          })
+        return {
+          status: 'voted' as const,
+          delta: {
+            score: value,
+            upvotes: value === 1 ? 1 : 0,
+            downvotes: value === -1 ? 1 : 0,
+          },
         }
       }
-      return { status: 'voted' }
     }
   })
+
+  await applyVoteDelta(postId, result.delta)
+  await emitVoteUpdate(postId)
+  return { status: result.status }
 }

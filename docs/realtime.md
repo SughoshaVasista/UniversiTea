@@ -17,6 +17,11 @@ with PostgreSQL, and stores the authenticated user ID in `socket.data`. A
 `subscribe_user` request is rejected unless its requested ID matches that value.
 Community and post rooms remain public event channels; private user rooms do not.
 
+Vote counters use the same Redis runtime. PostgreSQL stores each idempotent `Vote`
+row, Redis holds pending score/upvote/downvote deltas, and the interval worker
+flushes those deltas in batched updates. Reads merge pending deltas so displayed
+counts stay fresh; HOT ordering can lag until a flush completes.
+
 ## Local two-instance check
 
 1. Start Redis: `docker run --name universitea-redis -p 6379:6379 -d redis:7-alpine`.

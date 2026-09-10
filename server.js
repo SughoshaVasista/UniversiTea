@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const { createServer } = require('http')
 const { parse } = require('url')
 const next = require('next')
@@ -50,6 +51,9 @@ app.prepare().then(async () => {
   // API routes use this process-local handle to emit; the Redis adapter forwards
   // those events to sockets connected to every other app instance.
   global.io = io
+
+  const { startVoteDeltaWorker } = require('./workers/voteDeltaWorker')
+  startVoteDeltaWorker(pubClient)
 
   io.use(async (socket, next) => {
     try {
