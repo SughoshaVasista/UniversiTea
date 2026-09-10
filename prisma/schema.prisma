@@ -1,0 +1,530 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Community {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  collegeName String?
+  emailDomain String?
+  status      String   @default("VERIFIED") // PENDING, UNDER_REVIEW, VERIFIED, REJECTED, SUSPENDED
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships         CommunityMembership[]
+  posts               Post[]
+  anonymousIdentities AnonymousIdentity[]
+  reports             Report[]
+  moderationActions   ModerationAction[]
+  trustProfiles       CommunityTrustProfile[]
+  reputationEvents    ReputationEvent[]
+  abuseSignals        AbuseSignal[]
+  tags                Tag[]
+  claims              Claim[]
+  claimClusters       ClaimCluster[]
+  aiAnalyses          AIAnalysis[]
+  follows             CommunityFollow[]
+}
+
+model User {
+  id                  String    @id @default(cuid())
+  emailHash           String    @unique // One-way SHA-256 HMAC: real email & name never stored
+  hashedPassword      String?
+  anonymousHandle     String    @default("Anonymous Student")
+  profileAvatar       String?
+  profileBio          String?
+  theme               String    @default("dark")
+  preferredNameStyle  String    @default("classic")
+  role                String    @default("USER") // USER, SUPER_ADMIN
+  accountStatus       String    @default("ACTIVE") // ACTIVE, RESTRICTED, SUSPENDED, BANNED
+  suspensionExpiresAt DateTime?
+  createdAt           DateTime  @default(now())
+
+  sessions            Session[]
+  posts               Post[]
+  comments            Comment[]
+  votes               Vote[]
+  commentVotes        CommentVote[]
+  anonymousIdentities AnonymousIdentity[]
+  receipts            Receipt[]
+  verificationHistory VerificationHistory[]
+  reportsFiled        Report[]                @relation("ReportsFiled")
+  reportsReviewed     Report[]                @relation("ReportsReviewed")
+  moderationActions   ModerationAction[]
+  appealsFiled        Appeal[]                @relation("AppealsFiled")
+  appealsReviewed     Appeal[]                @relation("AppealsReviewed")
+  warnings            Warning[]               @relation("UserWarnings")
+  warningsIssued      Warning[]               @relation("WarningsIssued")
+  trustProfiles       CommunityTrustProfile[]
+  reputationEvents    ReputationEvent[]
+  abuseSignals        AbuseSignal[]
+  notifications       Notification[]          @relation("UserNotifications")
+  notificationPrefs   NotificationPreference?
+  memberships         CommunityMembership[]
+  applications        CommunityApplication[]
+  communityFollows    CommunityFollow[]
+  topicFollows        TopicFollow[]
+  savedPosts          SavedPost[]
+  mutes               Mute[]
+}
+
+model CommunityFollow {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  @@unique([userId, communityId])
+  @@index([communityId, createdAt])
+}
+
+model TopicFollow {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, tagId])
+  @@index([tagId, createdAt])
+}
+
+model SavedPost {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@index([userId, createdAt])
+}
+
+model Mute {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetType String // POST, TOPIC, COMMUNITY
+  targetId   String
+  createdAt  DateTime @default(now())
+  post       Post?    @relation(fields: [postId], references: [id])
+  postId     String?
+
+  @@unique([userId, targetType, targetId])
+  @@index([userId, targetType])
+}
+
+model CommunityMembership {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  role        String    @default("MEMBER") // MEMBER, MODERATOR, COMMUNITY_ADMIN
+  joinedAt    DateTime  @default(now())
+
+  @@unique([userId, communityId])
+}
+
+model CommunityApplication {
+  id            String   @id @default(cuid())
+  applicantId   String
+  applicant     User     @relation(fields: [applicantId], references: [id])
+  collegeName   String
+  requestedSlug String
+  website       String?
+  location      String?
+  emailDomain   String?
+  description   String?
+  status        String   @default("PENDING") // PENDING, UNDER_REVIEW, APPROVED, REJECTED
+  reviewerNotes String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model AnonymousIdentity {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  threadId    String // postId or context ID (e.g. "community" for preview)
+  name        String // e.g. "Anonymous Panda"
+  avatar      String // e.g. "🐼"
+  createdAt   DateTime  @default(now())
+
+  posts    Post[]
+  comments Comment[]
+
+  @@unique([userId, threadId])
+  @@index([communityId])
+  @@index([threadId])
+}
+
+model OtpToken {
+  id        String   @id @default(cuid())
+  emailHash String // One-way SHA-256 HMAC of email
+  hashedOtp String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([emailHash])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Post {
+  id                  String             @id @default(cuid())
+  title               String
+  content             String
+  category            String             @default("HOT_TEA")
+  status              String             @default("PUBLISHED") // PUBLISHED, HIDDEN, DELETED
+  verificationStatus  String             @default("UNVERIFIED") // UNVERIFIED, CHECKING, LIKELY, VERIFIED, DISPUTED, FALSE, REMOVED
+  upvotes             Int                @default(0)
+  downvotes           Int                @default(0)
+  score               Int                @default(0)
+  communityId         String
+  community           Community          @relation(fields: [communityId], references: [id])
+  authorId            String
+  author              User               @relation(fields: [authorId], references: [id])
+  anonymousIdentityId String?
+  anonymousIdentity   AnonymousIdentity? @relation(fields: [anonymousIdentityId], references: [id])
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  deletedAt           DateTime?
+
+  comments            Comment[]
+  votes               Vote[]
+  receipts            Receipt[]
+  verificationHistory VerificationHistory[]
+  tags                PostTag[]
+  claims              Claim[]
+  savedPosts          SavedPost[]
+  mutes               Mute[]
+
+  @@index([communityId, createdAt])
+  @@index([createdAt])
+}
+
+model Comment {
+  id                  String             @id @default(cuid())
+  content             String
+  postId              String
+  post                Post               @relation(fields: [postId], references: [id], onDelete: Cascade)
+  parentCommentId     String?
+  parentComment       Comment?           @relation("CommentToComment", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies             Comment[]          @relation("CommentToComment")
+  authorId            String
+  author              User               @relation(fields: [authorId], references: [id])
+  anonymousIdentityId String?
+  anonymousIdentity   AnonymousIdentity? @relation(fields: [anonymousIdentityId], references: [id])
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  deletedAt           DateTime?
+  votes               CommentVote[]
+
+  @@index([postId, createdAt])
+  @@index([parentCommentId])
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  value     Int // 1 (upvote) or -1 (downvote)
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([postId, userId])
+}
+
+model CommentVote {
+  id        String   @id @default(cuid())
+  value     Int
+  commentId String
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([commentId, userId])
+  @@index([commentId])
+}
+
+model Receipt {
+  id            String   @id @default(cuid())
+  postId        String
+  post          Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  submittedById String
+  submittedBy   User     @relation(fields: [submittedById], references: [id])
+  type          String // OFFICIAL_SOURCE, PUBLIC_WEBPAGE, DOCUMENT, SCREENSHOT, PHOTO, FIRST_HAND, SECOND_HAND, OTHER
+  description   String
+  sourceUrl     String?
+  storageKey    String?
+  credibility   String   @default("UNKNOWN") // VERY_HIGH, HIGH, MEDIUM, LOW, UNKNOWN
+  status        String   @default("PENDING_REVIEW") // PENDING_REVIEW, APPROVED, REJECTED, REMOVED
+  supportsClaim Boolean  @default(true) // true for corroboration, false for contradiction
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([postId])
+  @@index([status])
+}
+
+model VerificationHistory {
+  id            String   @id @default(cuid())
+  postId        String
+  post          Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  actorId       String
+  actor         User     @relation(fields: [actorId], references: [id])
+  previousState String
+  newState      String
+  reason        String
+  createdAt     DateTime @default(now())
+
+  @@index([postId])
+}
+
+model Report {
+  id           String    @id @default(cuid())
+  communityId  String
+  community    Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  reporterId   String
+  reporter     User      @relation("ReportsFiled", fields: [reporterId], references: [id])
+  targetType   String // POST, COMMENT, RECEIPT
+  targetId     String
+  reason       String
+  description  String?
+  status       String    @default("OPEN") // OPEN, IN_REVIEW, RESOLVED, DISMISSED
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  reviewedAt   DateTime?
+  reviewedById String?
+  reviewer     User?     @relation("ReportsReviewed", fields: [reviewedById], references: [id])
+  resolution   String?
+
+  @@index([communityId, status])
+  @@index([targetType, targetId])
+}
+
+model ModerationAction {
+  id            String    @id @default(cuid())
+  communityId   String
+  community     Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  actorId       String
+  actor         User      @relation(fields: [actorId], references: [id])
+  action        String // CONTENT_HIDDEN, USER_SUSPENDED, etc.
+  targetType    String
+  targetId      String
+  previousState String?
+  newState      String?
+  reason        String
+  createdAt     DateTime  @default(now())
+
+  appeals Appeal[]
+
+  @@index([communityId])
+}
+
+model Appeal {
+  id           String           @id @default(cuid())
+  userId       String
+  user         User             @relation("AppealsFiled", fields: [userId], references: [id], onDelete: Cascade)
+  actionId     String
+  action       ModerationAction @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  reason       String
+  status       String           @default("PENDING") // PENDING, ACCEPTED, REJECTED
+  createdAt    DateTime         @default(now())
+  reviewedAt   DateTime?
+  reviewedById String?
+  reviewer     User?            @relation("AppealsReviewed", fields: [reviewedById], references: [id])
+}
+
+model Warning {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation("UserWarnings", fields: [userId], references: [id], onDelete: Cascade)
+  moderatorId String
+  moderator   User     @relation("WarningsIssued", fields: [moderatorId], references: [id])
+  reason      String
+  createdAt   DateTime @default(now())
+}
+
+model CommunityTrustProfile {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  trustScore  Int       @default(0)
+  status      String    @default("NEW") // NEW, TRUST_ESTABLISHING, ESTABLISHED, FLAGGED
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, communityId])
+}
+
+model ReputationEvent {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  eventType   String // RECEIPT_APPROVED, RECEIPT_REJECTED, SPAM_DETECTED, MODERATION_WARNING
+  pointsDelta Int
+  targetType  String?
+  targetId    String?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, communityId])
+}
+
+model AbuseSignal {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  signalType  String // RAPID_VOTING, DUPLICATE_CONTENT, SYNCED_ACTIVITY
+  severity    String // LOW, MEDIUM, HIGH, CRITICAL
+  createdAt   DateTime  @default(now())
+
+  @@index([userId, communityId])
+}
+
+model Tag {
+  id           String        @id @default(cuid())
+  name         String // normalized e.g., "placements"
+  displayName  String // e.g., "Placements"
+  communityId  String
+  community    Community     @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  createdAt    DateTime      @default(now())
+  posts        PostTag[]
+  topicFollows TopicFollow[]
+
+  @@unique([communityId, name])
+}
+
+model PostTag {
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tagId  String
+  tag    Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  recipientId String
+  recipient   User      @relation("UserNotifications", fields: [recipientId], references: [id], onDelete: Cascade)
+  type        String // COMMENT_REPLY, POST_ACTIVITY, VERIFICATION_UPDATE, RECEIPT_UPDATE, MODERATION_ACTION, SYSTEM
+  payload     String // JSON stringified payload
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  // Optional links for easier querying
+  postId    String?
+  commentId String?
+
+  @@index([recipientId])
+  @@index([createdAt])
+}
+
+model NotificationPreference {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailEnabled  Boolean  @default(false)
+  pushEnabled   Boolean  @default(false)
+  replies       Boolean  @default(true)
+  verifications Boolean  @default(true)
+  moderation    Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// ==================== Phase 10: AI Moderation ====================
+
+model Claim {
+  id                   String        @id @default(cuid())
+  postId               String
+  post                 Post          @relation(fields: [postId], references: [id], onDelete: Cascade)
+  communityId          String
+  community            Community     @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  normalizedStatement  String
+  claimType            String        @default("FACTUAL") // FACTUAL, RUMOUR, PREDICTION, OPINION, QUESTION, SATIRE, NOT_VERIFIABLE
+  extractionConfidence Float         @default(0)
+  extractionMethod     String        @default("AI") // AI, MANUAL
+  status               String        @default("EXTRACTED") // EXTRACTED, REVIEWED, MERGED, DISMISSED
+  clusterId            String?
+  cluster              ClaimCluster? @relation(fields: [clusterId], references: [id], onDelete: SetNull)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  @@index([postId])
+  @@index([communityId])
+  @@index([clusterId])
+  @@index([communityId, createdAt])
+}
+
+model ClaimCluster {
+  id          String    @id @default(cuid())
+  communityId String
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  label       String // Human-readable cluster summary e.g. "Holiday tomorrow"
+  status      String    @default("ACTIVE") // ACTIVE, RESOLVED, STALE
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  claims Claim[]
+
+  @@index([communityId])
+  @@index([communityId, status])
+}
+
+model AIAnalysis {
+  id           String    @id @default(cuid())
+  targetType   String // POST, COMMENT, RECEIPT
+  targetId     String
+  communityId  String
+  community    Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  analysisType String // CONTENT_SAFETY, PII_DETECTION, CLAIM_EXTRACTION, SIMILARITY, RECEIPT_ANALYSIS, SPAM
+  provider     String // e.g. "mock", "openai"
+  modelVersion String // e.g. "mock-v1", "gpt-4o-2024-08"
+  resultJson   String // JSON stringified structured result
+  riskLevel    String    @default("LOW") // LOW, MEDIUM, HIGH, CRITICAL
+  categories   String    @default("") // Comma-separated: HARASSMENT,THREAT,DOXXING,HATE,SPAM,PII,TARGETED_ALLEGATION,SEXUAL_PRIVATE_CONTENT,OTHER
+  contentHash  String // SHA-256 of analyzed content for dedup/caching
+  createdAt    DateTime  @default(now())
+
+  @@index([targetType, targetId])
+  @@index([communityId])
+  @@index([contentHash])
+  @@index([communityId, analysisType])
+}
