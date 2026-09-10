@@ -62,6 +62,7 @@ UniversiTea operates as **Publicly Anonymous, Backend-Accountable**:
 - **Language:** TypeScript (Strict mode)
 - **Styling:** Tailwind CSS
 - **Database & ORM:** PostgreSQL + Prisma ORM 6.19.3
+- **Realtime:** Socket.IO with Redis pub/sub adapter (Redis is required at runtime)
 - **Authentication:** NextAuth.js / Passwordless Email OTP / Credentials
 - **AI Engine:** Pluggable Provider Factory (`mock`, `gemini`, `openai`)
 - **Testing:** Jest + Testing Library (16 Test Suites, 86+ Tests)
@@ -90,9 +91,24 @@ npx prisma db seed
 # 5. Run test suite
 npm test
 
-# 6. Start local server
+# 6. Start Redis before the custom server
+docker run --name universitea-redis -p 6379:6379 -d redis:7-alpine
+
+# 7. Start local server
 npm run dev
 ```
+
+### Realtime deployment
+
+Set `REDIS_URL` to the same Redis instance for every UniversiTea app instance.
+The Socket.IO Redis adapter propagates post, comment, vote, verification, and
+notification events across instances. Socket user subscriptions are authorized
+from the `universitea_session` cookie during the handshake; a client cannot join
+another user's private notification room by supplying a different user ID.
+
+For a multi-instance smoke test, run two app processes on different ports behind
+the same Redis and connect a browser to each. A vote/comment/notification sent
+through one process should arrive on the other process's subscribed socket.
 
 ---
 
