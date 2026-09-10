@@ -2,7 +2,8 @@
 
 UniversiTea uses Socket.IO with `@socket.io/redis-adapter`. Redis is a required
 runtime dependency for horizontally scaled deployments, not merely an optional
-cache. Every app instance must use the same `REDIS_URL`.
+cache. Every production app instance must use the same `REDIS_URL`. Development
+may run in single-instance fallback mode when Redis is unavailable.
 
 ```env
 REDIS_URL=redis://localhost:6379

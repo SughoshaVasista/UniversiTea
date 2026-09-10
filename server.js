@@ -35,25 +35,34 @@ app.prepare().then(async () => {
 
   const redisUrl = process.env.REDIS_URL
   if (!redisUrl) {
-    throw new Error('REDIS_URL is required for horizontally scalable realtime events')
+    if (!dev) {
+      throw new Error('REDIS_URL is required for horizontally scalable realtime events')
+    }
+    console.warn('REDIS_URL is not set; starting single-instance realtime in development')
   }
 
-  const pubClient = createClient({ url: redisUrl })
-  const subClient = pubClient.duplicate()
-  pubClient.on('error', (error) => console.error('[redis:pub]', error))
-  subClient.on('error', (error) => console.error('[redis:sub]', error))
-  await Promise.all([pubClient.connect(), subClient.connect()])
+  let pubClient
+  let subClient
+  if (redisUrl) {
+    pubClient = createClient({ url: redisUrl })
+    subClient = pubClient.duplicate()
+    pubClient.on('error', (error) => console.error('[redis:pub]', error))
+    subClient.on('error', (error) => console.error('[redis:sub]', error))
+    await Promise.all([pubClient.connect(), subClient.connect()])
+  }
 
   // Attach Socket.io and share rooms/events across every app instance.
   const io = new Server(server)
-  io.adapter(createAdapter(pubClient, subClient))
+  if (pubClient && subClient) io.adapter(createAdapter(pubClient, subClient))
 
   // API routes use this process-local handle to emit; the Redis adapter forwards
   // those events to sockets connected to every other app instance.
   global.io = io
 
-  const { startVoteDeltaWorker } = require('./workers/voteDeltaWorker')
-  startVoteDeltaWorker(pubClient)
+  if (pubClient) {
+    const { startVoteDeltaWorker } = require('./workers/voteDeltaWorker')
+    startVoteDeltaWorker(pubClient)
+  }
 
   io.use(async (socket, next) => {
     try {

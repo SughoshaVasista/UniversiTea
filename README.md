@@ -101,6 +101,9 @@ npm run dev
 ### Realtime deployment
 
 Set `REDIS_URL` to the same Redis instance for every UniversiTea app instance.
+Production startup fails fast when it is missing. Development can start in
+single-instance mode without Redis, but cross-instance realtime and Redis-backed
+vote scaling are unavailable until Redis is running.
 The Socket.IO Redis adapter propagates post, comment, vote, verification, and
 notification events across instances. Socket user subscriptions are authorized
 from the `universitea_session` cookie during the handshake; a client cannot join
