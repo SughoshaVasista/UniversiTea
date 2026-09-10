@@ -2,14 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { useTheme } from '@/components/ui/ThemeProvider'
+import { avatarOptions } from '@/lib/profile/avatarOptions'
 
-const avatars = [
-  '🐼', '🦊', '🦉', '🐯', '🐙', '🤖', '🌙', '⚡',
-  '🥷', '🐉', '🦄', '🐍', '🐈', '🦇', '🐺', '🐸',
-  '🧙', '🧛', '🦸', '👾', '👽', '👻', '🤠', '🕵️',
-  '🎬', '📺', '🎸', '🎤', '🎧', '🎮', '🌟', '🔥',
-  '⚔️', '🌊', '🌹', '🌙', '☄️', '🚀', '🪐', '🦋',
-]
 
 export function SettingsPanel() {
   const { theme, setTheme } = useTheme()
@@ -42,7 +36,7 @@ export function SettingsPanel() {
         <h2 className="text-lg font-semibold">Anonymous identity</h2>
         <p className="text-sm text-muted mt-1">UniversiTea is built for anonymous participation. Avoid real names, phone numbers, email addresses, or student IDs.</p>
         <label className="block text-sm mt-5">Display name<input value={handle} onChange={(event) => setHandle(event.target.value)} className="input-field mt-2" maxLength={40} /></label>
-        <div className="mt-4"><span className="text-sm">Avatar</span><div className="flex flex-wrap gap-2 mt-2">{avatars.map((option) => <button key={option} type="button" aria-label={`Choose ${option} avatar`} onClick={() => setAvatar(option)} className={`avatar-choice ${avatar === option ? 'avatar-choice-active' : ''}`}>{option}</button>)}</div></div>
+        <div className="mt-4"><span className="text-sm">Avatar</span><div className="flex flex-wrap gap-2 mt-2">{avatarOptions.map((option) => <button key={`${option.category}-${option.name}`} type="button" title={option.name} aria-label={`Choose ${option.name} avatar`} onClick={() => setAvatar(option.emoji)} className={`avatar-choice ${avatar === option.emoji ? 'avatar-choice-active' : ''}`}>{option.emoji}</button>)}</div></div>
         <label className="block text-sm mt-4">Bio<textarea value={bio} onChange={(event) => setBio(event.target.value)} className="input-field mt-2 min-h-20" maxLength={160} placeholder="Keep it anonymous." /></label>
       </section>
       <section className="surface-panel p-5">
