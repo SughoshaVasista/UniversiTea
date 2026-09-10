@@ -10,9 +10,11 @@ interface PostCardProps {
   onVote?: (postId: string, value: 1 | -1 | 0) => void
   userVote?: 1 | -1 | 0
   votePending?: boolean
+  canDelete?: boolean
+  onDelete?: (postId: string) => void
 }
 
-export function PostCard({ post, communitySlug, onVote = () => {}, userVote = 0, votePending = false }: PostCardProps) {
+export function PostCard({ post, communitySlug, onVote = () => {}, userVote = 0, votePending = false, canDelete = false, onDelete = () => {} }: PostCardProps) {
   const isUpvoted = userVote === 1
   const isDownvoted = userVote === -1
 
@@ -21,6 +23,7 @@ export function PostCard({ post, communitySlug, onVote = () => {}, userVote = 0,
       <div className="flex items-center justify-between mb-3">
         <AnonymousAuthor name={post.author.anonymousName} avatar={post.author.avatar} />
         <div className="flex items-center gap-2">
+          {canDelete && <button type="button" onClick={() => onDelete(post.id)} className="text-xs text-zinc-500 hover:text-rose-400 transition-colors" aria-label="Delete tea">Delete</button>}
           <span className="text-xs font-medium px-2 py-1 bg-zinc-800 text-zinc-300 rounded-md">
             {post.category}
           </span>

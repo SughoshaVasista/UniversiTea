@@ -7,6 +7,7 @@ import { VerificationBadge, type VerificationStatus } from '@/components/ui/Veri
 import { CommentSection } from '@/components/post/CommentSection'
 import { TeaCheck } from '@/components/verification/TeaCheck'
 import { getSession } from '@/lib/auth/getSession'
+import { DeletePostButton } from '@/components/post/DeletePostButton'
 
 interface Props {
   params: Promise<{ communitySlug: string, postId: string }>
@@ -39,9 +40,10 @@ export default async function PostDetailPage({ params }: Props) {
           ) : (
             <AnonymousAuthor name="Anonymous Student" avatar="🎓" />
           )}
-          <span className="text-xs text-zinc-500">
-            {post.createdAt.toLocaleDateString()}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-zinc-500">{post.createdAt.toLocaleDateString()}</span>
+            {session?.user.id === post.authorId && <DeletePostButton communitySlug={communitySlug} postId={post.id} />}
+          </div>
         </div>
 
         <div className="mb-4">

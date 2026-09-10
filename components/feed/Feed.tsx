@@ -67,15 +67,29 @@ export function Feed({ communitySlug, communityId, isAuthenticated }: FeedProps)
     const handleVoteUpdate = (data: { postId: string, score: number, upvotes: number, downvotes: number }) => {
       setPosts(prev => prev.map(p => p.id === data.postId ? { ...p, score: data.score, upvotes: data.upvotes, downvotes: data.downvotes } : p))
     }
+    const handlePostDeleted = ({ postId }: { postId: string }) => setPosts((current) => current.filter((post) => post.id !== postId))
 
     socket.on('NEW_POST', handleNewPost)
     socket.on('POST_VOTE_UPDATED', handleVoteUpdate)
+    socket.on('POST_DELETED', handlePostDeleted)
 
     return () => {
       socket.off('NEW_POST', handleNewPost)
       socket.off('POST_VOTE_UPDATED', handleVoteUpdate)
+      socket.off('POST_DELETED', handlePostDeleted)
     }
   }, [socket, tab])
+
+  const handleDelete = async (postId: string) => {
+    if (!window.confirm('Delete this tea? It will disappear from the community.')) return
+    const response = await fetch(`/api/communities/${communitySlug}/posts/${postId}`, { method: 'DELETE' })
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}))
+      window.alert(data.error || 'Could not delete tea')
+      return
+    }
+    setPosts((current) => current.filter((post) => post.id !== postId))
+  }
 
   const handleVote = async (postId: string, value: 1 | -1 | 0) => {
     if (!isAuthenticated || pendingVotes.has(postId)) return
@@ -185,6 +199,8 @@ export function Feed({ communitySlug, communityId, isAuthenticated }: FeedProps)
               onVote={handleVote} 
               userVote={post.userVote || 0}
               votePending={pendingVotes.has(post.id)}
+              canDelete={post.canDelete}
+              onDelete={handleDelete}
             />
           ))}
 

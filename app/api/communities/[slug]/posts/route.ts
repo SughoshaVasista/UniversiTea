@@ -35,6 +35,7 @@ export async function GET(
         downvotes: post.downvotes,
         score: post.score,
         userVote: post.votes?.[0]?.value || 0,
+        canDelete: session?.user.id === post.authorId,
         createdAt: post.createdAt.toISOString(),
         updatedAt: post.updatedAt.toISOString(),
         commentCount: post._count?.comments ?? 0,

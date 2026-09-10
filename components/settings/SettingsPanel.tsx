@@ -3,7 +3,13 @@
 import { useEffect, useState } from 'react'
 import { useTheme } from '@/components/ui/ThemeProvider'
 
-const avatars = ['🐼', '🦊', '🦉', '🐯', '🐙', '🤖', '🌙', '⚡']
+const avatars = [
+  '🐼', '🦊', '🦉', '🐯', '🐙', '🤖', '🌙', '⚡',
+  '🥷', '🐉', '🦄', '🐍', '🐈', '🦇', '🐺', '🐸',
+  '🧙', '🧛', '🦸', '👾', '👽', '👻', '🤠', '🕵️',
+  '🎬', '📺', '🎸', '🎤', '🎧', '🎮', '🌟', '🔥',
+  '⚔️', '🌊', '🌹', '🌙', '☄️', '🚀', '🪐', '🦋',
+]
 
 export function SettingsPanel() {
   const { theme, setTheme } = useTheme()
