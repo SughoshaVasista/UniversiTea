@@ -55,13 +55,19 @@ export async function submitReceipt({
   })
 }
 
-export async function getReceiptsForPost(postId: string) {
+export async function getReceiptsForPost(postId: string, viewerId?: string) {
   // Retrieve receipts, hiding submittedBy details.
   // In a real app we might only show APPROVED ones, but we'll return all
   // and let the UI handle showing PENDING_REVIEW based on auth if we want,
   // or just return APPROVED for public.
   const receipts = await prisma.receipt.findMany({
-    where: { postId, status: 'APPROVED' },
+    where: {
+      postId,
+      OR: [
+        { status: 'APPROVED' },
+        ...(viewerId ? [{ submittedById: viewerId, status: 'PENDING_REVIEW' }] : []),
+      ],
+    },
     orderBy: { createdAt: 'desc' },
     select: {
       id: true,

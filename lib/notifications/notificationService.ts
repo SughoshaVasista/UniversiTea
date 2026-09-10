@@ -1,6 +1,4 @@
 import { prisma } from '@/lib/db/prisma'
-// If we had a decoupled event emitter, we would emit real-time events here.
-// For MVP, we can import the realtime broadcaster directly if available, or just rely on DB.
 
 export interface CreateNotificationOptions {
   recipientId: string
@@ -33,7 +31,6 @@ export async function sendNotification(opts: CreateNotificationOptions) {
     }
   })
 
-  // TODO: Trigger real-time WebSocket event here
   if (global.io) {
     global.io.to(`user_${opts.recipientId}`).emit('NEW_NOTIFICATION', notification)
   }

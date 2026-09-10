@@ -35,7 +35,7 @@ export function PostCard({ post, communitySlug, onVote = () => {}, userVote = 0 
       </Link>
       
       <div className="flex items-center justify-between">
-        <VerificationBadge status="UNVERIFIED" />
+        <VerificationBadge status={post.verificationStatus || 'UNVERIFIED'} />
         
         <div className="flex items-center gap-4">
           <div className="flex items-center bg-zinc-800/50 rounded-full">

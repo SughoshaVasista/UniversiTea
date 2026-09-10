@@ -15,7 +15,8 @@ export async function GET(
       return NextResponse.json({ error: 'Community not found' }, { status: 404 })
     }
 
-    const receipts = await getReceiptsForPost(postId)
+    const session = await getParticipationSession()
+    const receipts = await getReceiptsForPost(postId, session?.user.id)
     
     return NextResponse.json({ receipts })
   } catch (error: any) {

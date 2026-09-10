@@ -32,8 +32,9 @@ export function TeaCheck({ postId, communitySlug, initialVerificationStatus }: T
     fetchReceipts()
   }, [postId, communitySlug])
 
-  const supportingCount = receipts.filter(r => r.supportsClaim).length
-  const contradictingCount = receipts.filter(r => !r.supportsClaim).length
+  const approvedReceipts = receipts.filter(r => r.status === 'APPROVED')
+  const supportingCount = approvedReceipts.filter(r => r.supportsClaim).length
+  const contradictingCount = approvedReceipts.filter(r => !r.supportsClaim).length
 
   return (
     <div className="mt-8 pt-8 border-t border-zinc-800">
@@ -58,8 +59,8 @@ export function TeaCheck({ postId, communitySlug, initialVerificationStatus }: T
           communitySlug={communitySlug} 
           onSuccess={() => {
             setShowForm(false)
-            // Note: Normally we don't refetch immediately because they are PENDING_REVIEW,
-            // but we might want to show the user their pending ones in a real app.
+            setLoading(true)
+            fetchReceipts()
           }}
           onCancel={() => setShowForm(false)}
         />
@@ -73,6 +74,18 @@ export function TeaCheck({ postId, communitySlug, initialVerificationStatus }: T
         </div>
       ) : (
         <div className="space-y-6">
+          {receipts.some((receipt) => receipt.status === 'PENDING_REVIEW') && (
+            <div className="p-4 bg-amber-950/30 border border-amber-800/50 rounded-xl">
+              <h4 className="text-sm font-semibold text-amber-300 mb-1">Pending review</h4>
+              <p className="text-xs text-amber-200/70 mb-3">Your submitted receipt is visible to you while a moderator reviews it. It is not part of the public evidence count yet.</p>
+              <div className="space-y-3">
+                {receipts.filter((receipt) => receipt.status === 'PENDING_REVIEW').map((receipt) => (
+                  <ReceiptCard key={receipt.id} receipt={receipt} />
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-4 mb-4">
             {supportingCount > 0 && (
               <span className="text-xs font-medium px-2 py-1 bg-emerald-950/40 text-emerald-400 rounded-md border border-emerald-900/40">
@@ -87,7 +100,7 @@ export function TeaCheck({ postId, communitySlug, initialVerificationStatus }: T
           </div>
 
           <div className="grid grid-cols-1 gap-4">
-            {receipts.map(receipt => (
+            {receipts.filter((receipt) => receipt.status === 'APPROVED').map(receipt => (
               <ReceiptCard key={receipt.id} receipt={receipt} />
             ))}
           </div>

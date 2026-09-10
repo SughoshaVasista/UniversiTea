@@ -184,11 +184,25 @@ export async function votePost(postId: string, userId: string, communityId: stri
 
         await tx.post.update({ where: { id: postId }, data: updateData })
       }
+      const updatedPost = typeof tx.post.findUnique === 'function'
+        ? await tx.post.findUnique({ where: { id: postId }, select: { id: true, score: true, upvotes: true, downvotes: true } })
+        : null
+      if (updatedPost && global.io) {
+        global.io.to(`post_${postId}`).emit('POST_VOTE_UPDATED', updatedPost)
+      }
       return { status: 'removed' }
     } else {
       // Create or update vote
       if (existingVote) {
-        if (existingVote.value === value) return { status: 'unchanged' } // no op
+        if (existingVote.value === value) {
+          const currentPost = typeof tx.post.findUnique === 'function'
+            ? await tx.post.findUnique({ where: { id: postId }, select: { id: true, score: true, upvotes: true, downvotes: true } })
+            : null
+          if (currentPost && global.io) {
+            global.io.to(`post_${postId}`).emit('POST_VOTE_UPDATED', currentPost)
+          }
+          return { status: 'unchanged' }
+        }
         
         await tx.vote.update({
           where: { id: existingVote.id },
@@ -209,6 +223,13 @@ export async function votePost(postId: string, userId: string, communityId: stri
         }
 
         await tx.post.update({ where: { id: postId }, data: updateData })
+
+        const updatedPost = typeof tx.post.findUnique === 'function'
+          ? await tx.post.findUnique({ where: { id: postId }, select: { id: true, score: true, upvotes: true, downvotes: true } })
+          : null
+        if (updatedPost && global.io) {
+          global.io.to(`post_${postId}`).emit('POST_VOTE_UPDATED', updatedPost)
+        }
       } else {
         await tx.vote.create({
           data: { postId, userId, value }
@@ -224,8 +245,8 @@ export async function votePost(postId: string, userId: string, communityId: stri
         }
 
         const updatedPost = await tx.post.update({ where: { id: postId }, data: updateData })
-        
-        if (global.io) {
+
+        if (global.io && updatedPost) {
           global.io.to(`post_${postId}`).emit('POST_VOTE_UPDATED', {
             postId,
             score: updatedPost.score,
